@@ -83,7 +83,7 @@ contract Lister is Admins{
     /**
      * @dev User can get listed on the featured list.
      */
-    function listMe() external {
+    function listMe() external payable {
         listMeSpecified(featuredList);
     }
 
