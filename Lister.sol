@@ -202,7 +202,7 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
         cost[_ID] = _config[2];
         limit[_ID] = _config[3];
         timer[_ID][0] = _config[4];
-        timer[_ID][0] = _config[5];
+        timer[_ID][1] = _config[5];
     }
 
     /**
