@@ -85,7 +85,7 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @param _ID The list ID to edit.
      * @param _metadata [name, description, image, animation].
      */
-    function setListMetadata(uint256 _ID, string[] calldata _metadata) external {
+    function setListMetadata(uint256 _ID, string[4] calldata _metadata) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         listName[_ID] = _metadata[0];
         listDescription[_ID] = _metadata[1];
