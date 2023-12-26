@@ -110,6 +110,10 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
         _mint(msg.sender, 1);
     }
 
+    /**
+     * @dev Get list owner of the specified list.
+     * @param _ID The list ID to check.
+     */
     function listOwnerByID(uint256 _ID) public view returns(address) {
         uint256 _tokenID = listIDToken[_ID];
         return ownerOf(_tokenID);
