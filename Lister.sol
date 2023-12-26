@@ -193,12 +193,12 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev List Owner or Admin can configure a list.
      * @param _ID The list ID to edit.
      * @param _config Config [activeState, trackValue, cost, limit, timerStart, timerEnd].
-     * Note: 0 = false, 1 = true isNegative ? uint256(-number) : uint256(number);
+     * Note: 0 = false, 1 = true
      */
     function setListConfig(uint256 _ID, uint256[6] calldata _config) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-        isActiveList[_ID] = _config[0] == 1 ? true : false;
-        trackValue[_ID] = _config[1] == 1 ? true : false;
+        isActiveList[_ID] = _config[0] == 1;
+        trackValue[_ID] = _config[1] == 1;
         cost[_ID] = _config[2];
         limit[_ID] = _config[3];
         timer[_ID][0] = _config[4];
