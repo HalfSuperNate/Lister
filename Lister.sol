@@ -4,9 +4,15 @@ pragma solidity ^ 0.8.23;
 import {ERC721PsiBurnable, ERC721Psi} from "./ERC721Psi/extension/ERC721PsiBurnable.sol";
 import {Admins} from "./Admins.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {LibString} from "solady/src/utils/LibString.sol";
+import {Base64} from "solady/src/utils/Base64.sol";
 
 /// @author developer's github https://github.com/HalfSuperNate
 contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
+    using LibString for uint256;
+    using LibString for string;
+    using Base64 for *;
+
     mapping(uint256 => address[]) public listID;
     mapping(address => mapping(uint256 => bool)) public listed;
     mapping(address => mapping(uint256 => uint256)) public sentValue;
@@ -17,6 +23,10 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => uint256) public tokenListID;
     mapping(uint256 => uint256) public listIDToken;
     mapping(uint256 => uint256[2]) public timer;
+    mapping(uint256 => string) public listName;
+    mapping(uint256 => string) public listDescription;
+    mapping(uint256 => string) public listImage;
+    mapping(uint256 => string) public listAnimation;
     uint256 public registeryCost;
     uint256 public listCount;
     uint256 public featuredList;
@@ -44,6 +54,43 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
         vault = msg.sender;
         _mint(msg.sender, 1); //mints the 0 token
         paused = true;
+    }
+
+    /**
+     * @dev Returns metadata uri for a token ID.
+     * @param tokenId The token ID to fetch metadata uri.
+     */
+    function tokenURI(uint256 tokenId) override public view returns (string memory) {
+        if (!_exists(tokenId)) revert Unavailable();
+        uint256 _ID = listIDToken[tokenId];
+
+        string memory json = Base64.encode(bytes(string(abi.encodePacked(
+        '{"name": "', 
+        listName[_ID], 
+        ' #', 
+        tokenId.toString(), 
+        '", "description": "', 
+        listDescription[_ID], 
+        '", "image": "', 
+        listImage[_ID], 
+        '", "animation_url": "', 
+        listAnimation[_ID], 
+        '"}'))));
+
+        return string(abi.encodePacked('data:application/json;base64,', json));
+    }
+
+    /**
+     * @dev User can set metadata for the specified list.
+     * @param _ID The list ID to edit.
+     * @param _metadata [name, description, image, animation].
+     */
+    function setListMetadata(uint256 _ID, string[] calldata _metadata) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        listName[_ID] = _metadata[0];
+        listDescription[_ID] = _metadata[1];
+        listImage[_ID] = _metadata[2];
+        listAnimation[_ID] = _metadata[3];
     }
 
     /**
