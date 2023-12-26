@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^ 0.8.23;
 
+import {ERC721PsiBurnable, ERC721Psi} from "./ERC721Psi/extension/ERC721PsiBurnable.sol";
 import {Admins} from "./Admins.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @author developer's github https://github.com/HalfSuperNate
-contract Lister is Admins{
+contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => address[]) public listID;
     mapping(address => mapping(uint256 => bool)) public listed;
     mapping(address => mapping(uint256 => uint256)) public sentValue;
@@ -12,23 +14,92 @@ contract Lister is Admins{
     mapping(uint256 => bool) public isActiveList;
     mapping(uint256 => uint256) public cost;
     mapping(uint256 => uint256) public limit;
+    mapping(uint256 => uint256) public tokenListID;
+    mapping(uint256 => uint256) public listIDToken;
     mapping(uint256 => uint256[2]) public timer;
+    uint256 public registeryCost;
+    uint256 public listCount;
     uint256 public featuredList;
+    uint256 public vaultBalance;
     address public vault;
+    bool public paused;
 
     error AlreadyListed();
+    error CannotBeZeroAddress();
     error Closed();
+    error InvalidUser();
     error NotListed();
+    error Paused();
     error TimeEnded();
     error TimeNotStarted();
+    error Unavailable();
     error ValueRequired();
     
-    constructor() Admins(msg.sender) {
+    constructor(string memory name, string memory symbol) ERC721Psi(name, symbol) Admins(msg.sender) {
+        init();
+    }
+
+    function init() internal {
+        if (listCount > 0) revert Unavailable();
         vault = msg.sender;
+        _mint(msg.sender, 1); //mints the 0 token
+        paused = true;
+    }
+
+    /**
+     * @dev User can register to own the specified list if available.
+     * @param _ID The list ID to register.
+     */
+    function registerList(uint256 _ID) external payable nonReentrant {
+        if (paused) revert Paused();
+        if (listIDToken[_ID] != 0) revert Unavailable();
+        if (registeryCost != 0) {
+            if (msg.value < registeryCost) revert ValueRequired();
+            vaultBalance += msg.value;
+        }
+        listCount++;
+        tokenListID[listCount] = _ID;
+        listIDToken[_ID] = listCount;
+        _mint(msg.sender, 1);
+    }
+
+    function listOwnerByID(uint256 _ID) public view returns(address) {
+        uint256 _tokenID = listIDToken[_ID];
+        return ownerOf(_tokenID);
+    }
+
+    /**
+     * @dev Check if caller is list owner or admin of the specified list.
+     * @param _ID The list ID to check.
+     */
+    function isListOwnerAdmin(uint256 _ID) public view returns(bool) {
+        if (checkIfAdmin()) {
+            return true;
+        }
+        return listOwnerByID(_ID) == msg.sender;
+    }
+
+    /**
+     * @dev User can check if an address is on the specified list.
+     * @param _ID The list ID to get.
+     * @param _address The address to check.
+     */
+    function checkIsListed(uint256 _ID, address _address) external view returns(bool) {
+        return listed[_address][_ID];
+    }
+
+    /**
+     * @dev User can check the value an address sent for the specified list.
+     * @param _ID The list ID to get.
+     * @param _address The address to check.
+     */
+    function checkSentValue(uint256 _ID, address _address) external view returns(uint256) {
+        return sentValue[_address][_ID];
     }
 
     /**
      * @dev User can get a list of addresses on the specified list.
+     * @param _ID The list ID to get.
      */
     function getList(uint256 _ID) external view returns(address[] memory) {
         return listID[_ID];
@@ -36,6 +107,7 @@ contract Lister is Admins{
 
     /**
      * @dev User can get a list of values sent on the specified list if tracked.
+     * @param _ID The list ID to get.
      */
     function getSentValues(uint256 _ID) public view returns(uint256[] memory) {
         uint256[] memory _values = new uint256[](listID[_ID].length);
@@ -47,8 +119,9 @@ contract Lister is Admins{
 
     /**
      * @dev User can get a total value sent for the specified list if tracked.
+     * @param _ID The list ID to get.
      */
-    function getSentTotal(uint256 _ID) external view returns(uint256) {
+    function getSentTotal(uint256 _ID) public view returns(uint256) {
         uint256 _total;
         uint256[] memory _values = getSentValues(_ID);
         for (uint256 i = 0; i < _values.length; i++) {
@@ -58,49 +131,76 @@ contract Lister is Admins{
     }
 
     /**
-     * @dev Admin can set if a list is active to collect.
+     * @dev User can get a start and end time for the specified list.
+     * @param _ID The list ID to get.
+     */
+    function getTimes(uint256 _ID) external view returns(uint256[2] memory) {
+        return timer[_ID];
+    }
+
+    /**
+     * @dev List Owner or Admin can configure a list.
+     * @param _ID The list ID to edit.
+     * @param _config Config [activeState, trackValue, cost, limit, timerStart, timerEnd].
+     * Note: 0 = false, 1 = true isNegative ? uint256(-number) : uint256(number);
+     */
+    function setListConfig(uint256 _ID, uint256[6] calldata _config) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        isActiveList[_ID] = _config[0] == 1 ? true : false;
+        trackValue[_ID] = _config[1] == 1 ? true : false;
+        cost[_ID] = _config[2];
+        limit[_ID] = _config[3];
+        timer[_ID][0] = _config[4];
+        timer[_ID][0] = _config[5];
+    }
+
+    /**
+     * @dev List Owner or Admin can set cost for users to get on the list.
      * @param _ID The list ID to edit.
      * @param _cost Cost for getting listed.
      */
-    function setListCost(uint256 _ID, uint256 _cost) public onlyAdmins {
+    function setListCost(uint256 _ID, uint256 _cost) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         cost[_ID] = _cost;
     }
 
     /**
-     * @dev Admin can set if a list has a limit.
+     * @dev List Owner or Admin can set if a list has a limit.
      * @param _ID The list ID to edit.
      * @param _limit Limit at 0 is limitless, otherwise limited at limit.
      */
-    function setListLimit(uint256 _ID, uint256 _limit) public onlyAdmins {
+    function setListLimit(uint256 _ID, uint256 _limit) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         limit[_ID] = _limit;
     }
 
     /**
-     * @dev Admin can set if a list has a start and stop time.
+     * @dev List Owner or Admin can set if a list has a start and stop time.
      * @param _ID The list ID to edit.
      * @param _StartEndTime 0 ignores timer, otherwise start at time[0] stop at time[1].
      */
-    function setListTimer(uint256 _ID, uint256[2] calldata _StartEndTime) public onlyAdmins {
+    function setListTimer(uint256 _ID, uint256[2] calldata _StartEndTime) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         timer[_ID] = _StartEndTime;
     }
 
     /**
-     * @dev Admin can set if a list is active & set if a list is tracking value sent.
+     * @dev List Owner or Admin can set if a list is active & set if a list is tracking value sent.
      * @param _ID The list ID to edit.
      * @param _state Flag true for active false for closed.
-     * @param _trackState Flag true for tracking false for not.
      */
-    function setListState(uint256 _ID, bool _state, bool _trackState) public onlyAdmins {
+    function setListState(uint256 _ID, bool _state) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         isActiveList[_ID] = _state;
-        setTrackValueState(_ID, _trackState);
     }
 
     /**
-     * @dev Admin can set if a list is tracking value sent.
+     * @dev List Owner or Admin can set if a list is tracking value sent.
      * @param _ID The list ID to edit.
      * @param _state Flag true for tracking false for not.
      */
-    function setTrackValueState(uint256 _ID, bool _state) public onlyAdmins {
+    function setTrackValueState(uint256 _ID, bool _state) public {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         trackValue[_ID] = _state;
     }
 
@@ -113,14 +213,16 @@ contract Lister is Admins{
     }
 
     /**
-     * @dev Admin can list a user on a specified list.
+     * @dev List Owner or Admin can add an address to a specified list.
      * @param _ID The list ID to get listed on.
+     * @param _address The address to list.
      */
-    function listSpecified(uint256 _ID, address _user) public onlyAdmins {
-        if (listed[_user][_ID]) revert AlreadyListed();
+    function listSpecified(uint256 _ID, address _address) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        if (listed[_address][_ID]) revert AlreadyListed();
         if (limit[_ID] != 0 && listID[_ID].length >= limit[_ID]) revert Closed();
-        listed[_user][_ID] = true;
-        listID[_ID].push(_user);
+        listed[_address][_ID] = true;
+        listID[_ID].push(_address);
     }
 
     /**
@@ -150,6 +252,7 @@ contract Lister is Admins{
 
     /**
      * @dev User can increase value sent if already listed on the specified list.
+     * @param _ID The list ID to increase value on.
      Note: User can only increase value within the timeframe and if the list is not closed.
      */
     function increaseSentValue(uint256 _ID) external payable {
@@ -161,20 +264,46 @@ contract Lister is Admins{
     }
 
     /**
+     * @dev Admin can set pause state.
+     * @param _pause Set to true for paused and false for unpause.
+     */
+    function setPause(bool _pause) external onlyAdmins{
+        paused = _pause;
+    }
+
+    /**
+     * @dev Admin can set registery cost.
+     * @param _cost Cost for minting a list.
+     */
+    function setRegisteryCost(uint256 _cost) external onlyAdmins{
+        registeryCost = _cost;
+    }
+
+    /**
      * @dev Allow admins to set a new vault address.
      * @param _newVault New vault to set.
      */
     function setVault(address _newVault) public onlyAdmins {
-        require(vault != address(0), "Vault Cannot Be 0");
+        if (_newVault == address(0)) revert CannotBeZeroAddress();
         vault = _newVault;
     }
 
     /**
-     * @dev Pull funds to the vault address.
+     * @dev Pull list funds.
      */
-    function withdraw() external {
-        require(vault != address(0), "Vault Cannot Be 0");
-        (bool success, ) = payable(vault).call{ value: address(this).balance } ("");
+    function withdraw(uint256 _ID) external nonReentrant {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        (bool success, ) = payable(msg.sender).call{ value: getSentTotal(_ID) } ("");
         require(success);
+    }
+
+    /**
+     * @dev Pull vaulted funds to the vault.
+     */
+    function withdrawVault() external nonReentrant {
+        if (vault == address(0)) revert CannotBeZeroAddress();
+        (bool success, ) = payable(vault).call{ value: vaultBalance } ("");
+        require(success);
+        vaultBalance = 0;
     }
 }
