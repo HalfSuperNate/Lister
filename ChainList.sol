@@ -8,7 +8,7 @@ import {LibString} from "solady/src/utils/LibString.sol";
 import {Base64} from "solady/src/utils/Base64.sol";
 
 /// @author developer's github https://github.com/HalfSuperNate
-contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
+contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     using LibString for *;
     using Base64 for *;
 
@@ -17,6 +17,7 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(address => mapping(uint256 => bool)) private listed;
     mapping(address => mapping(uint256 => uint256)) private sentValue;
     mapping(uint256 => uint256) private sentValueTotal;
+    mapping(uint256 => uint256) private releasedValueTotal;
     mapping(uint256 => uint256) public tokenListID; //gets list ID by tokenId
     mapping(uint256 => uint256) public listIDToken; //gets tokenId by list ID
     mapping(uint256 => uint256) public cost;
@@ -30,6 +31,8 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
     uint256 public registeryCost;
     uint256 public listCount;
     uint256 public featuredList;
+    uint256[3] public feeTier; // [default, tier_1, tier_2]
+    uint256[4] public feeTierLimits; // [tier_1_listed, tier_1_sent, tier_2_listed, tier_2_sent]
     uint256 public vaultBalance;
     address public vault;
     bool public paused;
@@ -92,7 +95,7 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
             if(i == listID[_ID].length - 1){
                 _result = string(abi.encodePacked(_result, listID[_ID][i].toHexString()));
             } else{
-                _result = string(abi.encodePacked(_result, listID[_ID][i].toHexString(), ",\n"));
+                _result = string(abi.encodePacked(_result, listID[_ID][i].toHexString(), ",\\n"));
             }
         }
 
@@ -199,11 +202,27 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
-     * @dev User can get a total value sent for the specified list if tracked.
+     * @dev User can get a total value sent for the specified list.
      * @param _ID The list ID to get.
      */
-    function getSentTotal(uint256 _ID) public view returns(uint256) {
+    function getSentTotal(uint256 _ID) external view returns(uint256) {
         return sentValueTotal[_ID];
+    }
+
+    /**
+     * @dev User can get a total value released for the specified list.
+     * @param _ID The list ID to get.
+     */
+    function getReleasedTotal(uint256 _ID) external view returns(uint256) {
+        return releasedValueTotal[_ID];
+    }
+
+    /**
+     * @dev User can get a releasable balance for the specified list.
+     * @param _ID The list ID to get.
+     */
+    function getReleasableTotal(uint256 _ID) external view returns(uint256) {
+        return sentValueTotal[_ID] - releasedValueTotal[_ID];
     }
 
     /**
@@ -336,6 +355,11 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
         listID[_ID].pop();
     }
 
+    /**
+     * @dev User can get the index of address from a specified list.
+     * @param _ID The list ID to get index from.
+     * @param _user The address to get index of.
+     */
     function getIndexOfUserOnList(uint256 _ID, address _user) public view returns(uint256) {
         for (uint256 i = 0; i < listID[_ID].length; i++) {
             if (listID[_ID][i] == _user) return i;
@@ -361,6 +385,7 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
         if (!isActiveList[_ID]) revert Closed();
         if (timer[_ID][1] != 0 && block.timestamp > timer[_ID][1]) revert TimeEnded();
         sentValue[msg.sender][_ID] += msg.value;
+        sentValueTotal[_ID] += msg.value;
     }
 
     /**
@@ -389,11 +414,38 @@ contract Lister is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
+     * @dev User can get the fee percentage for a specified list.
+     * @param _ID The list ID to get fee.
+     * Note: To get true percentage divide returned value by 1000.
+     */
+    function getFeePercentage(uint256 _ID) public view returns(uint256) {
+        // fees are based on a 3 tier system 
+        // a default percentage fee is taken on withdrawl
+        if (listID[_ID].length < feeTierLimits[0] || sentValueTotal[_ID] < feeTierLimits[1]) {
+            return feeTier[0];
+        }
+        // if sent total passes x ETH or y listed the percentage is set to tier 1
+        if (listID[_ID].length < feeTierLimits[2] || sentValueTotal[_ID] < feeTierLimits[3]) {
+            return feeTier[1];
+        }
+        // if sent total passes z ETH or w listed the percentage caps at tier 2
+        return feeTier[2];
+    }
+
+    /**
      * @dev Pull list funds.
+     * @param _ID The list ID to pull from.
+     * Note: Only List Owner or Admins can call this function.
      */
     function withdraw(uint256 _ID) external nonReentrant {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-        (bool success, ) = payable(msg.sender).call{ value: getSentTotal(_ID) } ("");
+        uint256 releasable = sentValueTotal[_ID] - releasedValueTotal[_ID];
+        uint256 fee = releasable * getFeePercentage(_ID) / 1000;
+        uint256 payment = releasable - fee;
+        require(payment != 0, "List is not due payment");
+        releasedValueTotal[_ID] += releasable;
+        vaultBalance += fee;
+        (bool success, ) = payable(msg.sender).call{ value: payment } ("");
         require(success);
     }
 
