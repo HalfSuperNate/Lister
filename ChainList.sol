@@ -90,7 +90,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     function getListDescription(uint256 _ID) public view returns (string memory) {
-        string memory _result = compareStrings(listDescription[_ID],"") ? "" : string(abi.encodePacked(listDescription[_ID], "\n\n"));
+        string memory _result = compareStrings(listDescription[_ID],"") ? "" : string(abi.encodePacked(listDescription[_ID], "\\n\\n"));
         for (uint256 i = 0; i < listID[_ID].length; i++) {
             if(i == listID[_ID].length - 1){
                 _result = string(abi.encodePacked(_result, listID[_ID][i].toHexString()));
