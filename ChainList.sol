@@ -28,6 +28,9 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => string) public listImage;
     mapping(uint256 => string) public listAnimation;
     mapping(uint256 => string) public listExternalURL;
+    mapping(uint256 => uint8[]) public listDisplayType; // 0=string, 1=int_float, 2="boost_number", 3="boost_percentage", 4="number", 5="date"
+    mapping(uint256 => string[]) public listTraitType; // "string" or "" for null
+    mapping(uint256 => string[]) public listTraitValue;
     uint256 public registeryCost;
     uint256 public listCount;
     uint256 public featuredList;
@@ -78,6 +81,8 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         listAnimation[_ID],
         '", "external_url": "', 
         listExternalURL[_ID],
+        '", "attributes": "', 
+        getListAttributes(_ID),
         '"}'))));
 
         return string(abi.encodePacked('data:application/json;base64,', json));
@@ -90,15 +95,56 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     function getListDescription(uint256 _ID) public view returns (string memory) {
-        string memory _result = compareStrings(listDescription[_ID],"") ? "" : string(abi.encodePacked(listDescription[_ID], "\\n\\n"));
+        string memory _result = compareStrings(listDescription[_ID],"") ? string(abi.encodePacked("### ", getListName(_ID), "\\n\\n---\\n\\n")) : string(abi.encodePacked("### ", getListName(_ID), "\\n\\n", listDescription[_ID], "\\n\\n---\\n\\n"));
         for (uint256 i = 0; i < listID[_ID].length; i++) {
-            if(i == listID[_ID].length - 1){
-                _result = string(abi.encodePacked(_result, listID[_ID][i].toHexString()));
+            if (i == listID[_ID].length - 1){
+                _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString()));
             } else{
-                _result = string(abi.encodePacked(_result, listID[_ID][i].toHexString(), ",\\n"));
+                _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString(), ",\\n"));
             }
         }
 
+        return _result;
+    }
+
+    function getListAttributes(uint256 _ID) public view returns (string memory) {
+        /*
+        Display Types: "boost_number", "boost_percentage", "number", "date", ""
+        Trait Type: "string", ""
+        Value: "string", unixDate, int, float
+        {"display_type":"boost_number","trait_type":"Trait Name","value":0.5},
+        {"trait_type":"Trait Name1","value":"Value1"},
+        {"value":"0x0"},
+        */
+        string memory _result;
+        for (uint256 i = 0; i < listDisplayType[_ID].length; i++) {
+            if (i == listID[_ID].length - 1){
+                _result = string(abi.encodePacked(_result, "{", getDisplayType(_ID,i), getTraitType(_ID,i), getTraitValue(_ID,i), "}"));
+            } else{
+                _result = string(abi.encodePacked(_result, "{", getDisplayType(_ID,i), getTraitType(_ID,i), getTraitValue(_ID,i), "},"));
+            }
+        }
+
+        return string(abi.encodePacked("[", _result, "]"));
+    }
+
+    
+    function getDisplayType(uint256 _ID, uint256 _index) public view returns (string memory) {
+        if (listDisplayType[_ID][_index] <= 1) return "";
+        if (listDisplayType[_ID][_index] == 2) return '"display_type":"boost_number",';
+        if (listDisplayType[_ID][_index] == 3) return '"display_type":"boost_percentage",';
+        if (listDisplayType[_ID][_index] == 4) return '"display_type":"number",';
+        if (listDisplayType[_ID][_index] == 5) return '"display_type":"date",';
+        return "";
+    }
+
+    function getTraitType(uint256 _ID, uint256 _index) public view returns (string memory) {
+        string memory _result = compareStrings(listTraitType[_ID][_index],"") ? "" : string(abi.encodePacked('"trait_type":"', listTraitType[_ID][_index], '",'));
+        return _result;
+    }
+
+    function getTraitValue(uint256 _ID, uint256 _index) public view returns (string memory) {
+        string memory _result = listDisplayType[_ID][_index] <= 1 ? string(abi.encodePacked('"value":"', listTraitValue[_ID][_index], '"')) : string(abi.encodePacked('"value":', listTraitValue[_ID][_index]));
         return _result;
     }
 
@@ -109,19 +155,19 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      */
     function setListMetadata(uint256 _ID, string[5] calldata _metadata) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-        if(!compareStrings(_metadata[0],"")){
+        if (!compareStrings(_metadata[0],"")){
             listName[_ID] = _metadata[0];
         }
-        if(!compareStrings(_metadata[1],"")){
+        if (!compareStrings(_metadata[1],"")){
             listDescription[_ID] = _metadata[1];
         }
-        if(!compareStrings(_metadata[2],"")){
+        if (!compareStrings(_metadata[2],"")){
             listImage[_ID] = _metadata[2];
         }
-        if(!compareStrings(_metadata[3],"")){
+        if (!compareStrings(_metadata[3],"")){
             listAnimation[_ID] = _metadata[3];
         }
-        if(!compareStrings(_metadata[4],"")){
+        if (!compareStrings(_metadata[4],"")){
             listExternalURL[_ID] = _metadata[4];
         }
     }
