@@ -127,7 +127,6 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
 
         return string(abi.encodePacked("[", _result, "]"));
     }
-
     
     function getDisplayType(uint256 _ID, uint256 _index) public view returns (string memory) {
         if (listDisplayType[_ID][_index] <= 1) return "";
@@ -146,6 +145,13 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     function getTraitValue(uint256 _ID, uint256 _index) public view returns (string memory) {
         string memory _result = listDisplayType[_ID][_index] <= 1 ? string(abi.encodePacked('"value":"', listTraitValue[_ID][_index], '"')) : string(abi.encodePacked('"value":', listTraitValue[_ID][_index]));
         return _result;
+    }
+
+    function setListAttributes(uint256 _ID, uint8[] calldata _displayType, string[] calldata _traitType, string[] calldata _traitValue) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        listDisplayType[_ID] = _displayType;
+        listTraitType[_ID] = _traitType;
+        listTraitValue[_ID] = _traitValue;
     }
 
     /**
