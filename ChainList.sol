@@ -147,12 +147,12 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         return _result;
     }
 
-    function setListAttributes(uint256 _ID, uint8[] calldata _displayType, string[] calldata _traitType, string[] calldata _traitValue) external {
-        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-        listDisplayType[_ID] = _displayType;
-        listTraitType[_ID] = _traitType;
-        listTraitValue[_ID] = _traitValue;
-    }
+    // function setListAttributes(uint256 _ID, uint8[] calldata _displayType, string[] calldata _traitType, string[] calldata _traitValue) external {
+    //     if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+    //     listDisplayType[_ID] = _displayType;
+    //     listTraitType[_ID] = _traitType;
+    //     listTraitValue[_ID] = _traitValue;
+    // }
 
     /**
      * @dev User can set metadata for the specified list.
