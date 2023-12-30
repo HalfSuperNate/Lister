@@ -368,6 +368,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
 
     /**
      * @dev List Owner or Admin can set an attribute display limit if a marketplace restricts attribute count.
+     * @param _ID The list ID to edit.
      * @param _limit The limit to set.
      */
     function setAttributeDisplayLimit(uint256 _ID, uint256 _limit) external {
