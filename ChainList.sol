@@ -31,6 +31,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => uint8[]) public listDisplayType; // 0=string, 1=int_float, 2="boost_number", 3="boost_percentage", 4="number", 5="date"
     mapping(uint256 => string[]) public listTraitType; // "string" or "" for null
     mapping(uint256 => string[]) public listTraitValue;
+    uint256 public attributeDisplayLimit;
     uint256 public registeryCost;
     uint256 public listCount;
     uint256 public featuredList;
@@ -43,6 +44,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     error AlreadyListed();
     error CannotBeZeroAddress();
     error Closed();
+    error IndexOutOfRange();
     error InvalidUser();
     error NotListed();
     error Paused();
@@ -81,9 +83,9 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         listAnimation[_ID],
         '", "external_url": "', 
         listExternalURL[_ID],
-        '", "attributes": "', 
+        '", "attributes": ', 
         getListAttributes(_ID),
-        '"}'))));
+        '}'))));
 
         return string(abi.encodePacked('data:application/json;base64,', json));
     }
@@ -95,40 +97,48 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     function getListDescription(uint256 _ID) public view returns (string memory) {
-        string memory _result = compareStrings(listDescription[_ID],"") ? string(abi.encodePacked("### ", getListName(_ID), "\\n\\n---\\n\\n")) : string(abi.encodePacked("### ", getListName(_ID), "\\n\\n", listDescription[_ID], "\\n\\n---\\n\\n"));
-        for (uint256 i = 0; i < listID[_ID].length; i++) {
-            if (i == listID[_ID].length - 1){
-                _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString()));
-            } else{
-                _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString(), ",\\n"));
-            }
-        }
+        string memory _result = compareStrings(listDescription[_ID],"") ? string(abi.encodePacked("### ", getListName(_ID), "\\n\\n---\\n")) : string(abi.encodePacked("### ", getListName(_ID), "\\n\\n", listDescription[_ID], "\\n\\n---\\n"));
+        // List out wallet addresses within the description
+        // if (listID[_ID].length == 0) return _result;
+        // for (uint256 i = 0; i < listID[_ID].length; i++) {
+        //     if (i == listID[_ID].length - 1){
+        //         _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString()));
+        //     } else{
+        //         _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString(), ",\\n"));
+        //     }
+        // }
 
         return _result;
     }
 
     function getListAttributes(uint256 _ID) public view returns (string memory) {
-        /*
-        Display Types: "boost_number", "boost_percentage", "number", "date", ""
-        Trait Type: "string", ""
-        Value: "string", unixDate, int, float
-        {"display_type":"boost_number","trait_type":"Trait Name","value":0.5},
-        {"trait_type":"Trait Name1","value":"Value1"},
-        {"value":"0x0"},
-        */
         string memory _result;
-        for (uint256 i = 0; i < listDisplayType[_ID].length; i++) {
-            if (i == listID[_ID].length - 1){
-                _result = string(abi.encodePacked(_result, "{", getDisplayType(_ID,i), getTraitType(_ID,i), getTraitValue(_ID,i), "}"));
-            } else{
+        if (listDisplayType[_ID].length != 0) {
+            for (uint256 i = 0; i < listDisplayType[_ID].length; i++) {
                 _result = string(abi.encodePacked(_result, "{", getDisplayType(_ID,i), getTraitType(_ID,i), getTraitValue(_ID,i), "},"));
             }
         }
-
+        if (listID[_ID].length == 0) {
+            _result = string(abi.encodePacked(_result, '{"value":"0x0000000000000000000000000000000000000000"}'));
+        } else{
+            for (uint256 i = 0; i < listID[_ID].length; i++) {
+                if (attributeDisplayLimit != 0 && (i + listDisplayType[_ID].length) >= attributeDisplayLimit) {
+                    _result = string(abi.encodePacked(_result, '{"trait_type":"*Continued*","value":"*See List Viewer*"}'));
+                    break;
+                }
+                if (i == listID[_ID].length - 1) {
+                    _result = string(abi.encodePacked(_result, '{"value":"', listID[_ID][i].toHexString(), '"}'));
+                } else{
+                    _result = string(abi.encodePacked(_result, '{"value":"', listID[_ID][i].toHexString(), '"},'));
+                }
+            }
+        }
+        
         return string(abi.encodePacked("[", _result, "]"));
     }
     
     function getDisplayType(uint256 _ID, uint256 _index) public view returns (string memory) {
+        if (_index > listDisplayType[_ID].length - 1) revert IndexOutOfRange();
         if (listDisplayType[_ID][_index] <= 1) return "";
         if (listDisplayType[_ID][_index] == 2) return '"display_type":"boost_number",';
         if (listDisplayType[_ID][_index] == 3) return '"display_type":"boost_percentage",';
@@ -138,21 +148,37 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     function getTraitType(uint256 _ID, uint256 _index) public view returns (string memory) {
+        if (_index > listTraitType[_ID].length - 1) revert IndexOutOfRange();
         string memory _result = compareStrings(listTraitType[_ID][_index],"") ? "" : string(abi.encodePacked('"trait_type":"', listTraitType[_ID][_index], '",'));
         return _result;
     }
 
     function getTraitValue(uint256 _ID, uint256 _index) public view returns (string memory) {
-        string memory _result = listDisplayType[_ID][_index] <= 1 ? string(abi.encodePacked('"value":"', listTraitValue[_ID][_index], '"')) : string(abi.encodePacked('"value":', listTraitValue[_ID][_index]));
+        if (_index > listDisplayType[_ID].length - 1) revert IndexOutOfRange();
+        string memory _result = listDisplayType[_ID][_index] == 0 ? string(abi.encodePacked('"value":"', listTraitValue[_ID][_index], '"')) : string(abi.encodePacked('"value":', listTraitValue[_ID][_index]));
         return _result;
     }
 
-    // function setListAttributes(uint256 _ID, uint8[] calldata _displayType, string[] calldata _traitType, string[] calldata _traitValue) external {
-    //     if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-    //     listDisplayType[_ID] = _displayType;
-    //     listTraitType[_ID] = _traitType;
-    //     listTraitValue[_ID] = _traitValue;
-    // }
+    /**
+     * @dev User can set attributes for the specified list.
+     * @param _ID The list ID to edit.
+     * @param _displayType Use 0=string, 1=int_float, 2="boost_number", 3="boost_percentage", 4="number", 5="date".
+     * @param _traitType Use "string" or "" for null.
+     * @param _traitValue Use "string" if displayType is 0 or "numbers" for displayTypes 1-4, for option 5 use "unixTimeStampNumber".
+     * Note: Example: 0, [0,1,2,3,4,5], ["","Lvl","Str","Hp","Mp","Birthday"], ["John","1.8","66","4","20","1703901173"]
+     */
+    function setListAttributes(uint256 _ID, uint8[] calldata _displayType, string[] calldata _traitType, string[] calldata _traitValue) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        listDisplayType[_ID] = new uint8[](_displayType.length);
+        listTraitType[_ID] = new string[](_displayType.length);
+        listTraitValue[_ID] = new string[](_displayType.length);
+
+        for (uint256 i = 0; i < _displayType.length; i++) {
+            listDisplayType[_ID][i] = _displayType[i];
+            listTraitType[_ID][i] = _traitType[i];
+            listTraitValue[_ID][i] = _traitValue[i];
+        }
+    }
 
     /**
      * @dev User can set metadata for the specified list.
@@ -183,7 +209,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @param _ID The unique list ID to register.
      */
     function registerList(uint256 _ID) external payable nonReentrant {
-        if (listIDToken[_ID] != 0) revert Unavailable();
+        if (listIDToken[_ID] != 0 || _ID == 0) revert Unavailable();
         if (paused) revert Paused();
         if (registeryCost != 0) {
             if (msg.value < registeryCost) revert ValueRequired();
@@ -289,7 +315,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev List Owner or Admin can configure a list.
      * @param _ID The list ID to edit.
      * @param _config Config [activeState, cost, limit, timerStart, timerEnd].
-     * Note: 0 = false, 1 = true
+     * Note: 0 = false, 1 = true. Example for a free no cost no limits list: 0, [1,0,0,0,0]
      */
     function setListConfig(uint256 _ID, uint256[5] calldata _config) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
@@ -346,6 +372,14 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      */
     function setFeaturedList(uint256 _ID) public onlyAdmins {
         featuredList = _ID;
+    }
+
+    /**
+     * @dev Admin can set an attribute display limit if a marketplace restricts attribute count.
+     * @param _limit The limit to set.
+     */
+    function setAttributeDisplayLimit(uint256 _limit) public onlyAdmins {
+        attributeDisplayLimit = _limit;
     }
 
     /**
