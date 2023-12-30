@@ -22,6 +22,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => uint256) public listIDToken; //gets tokenId by list ID
     mapping(uint256 => uint256) public cost;
     mapping(uint256 => uint256) public limit;
+    mapping(uint256 => uint256) public attributeDisplayLimit;
     mapping(uint256 => uint256[2]) private timer;
     mapping(uint256 => string) public listName;
     mapping(uint256 => string) public listDescription;
@@ -31,7 +32,6 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => uint8[]) public listDisplayType; // 0=string, 1=int_float, 2="boost_number", 3="boost_percentage", 4="number", 5="date"
     mapping(uint256 => string[]) public listTraitType; // "string" or "" for null
     mapping(uint256 => string[]) public listTraitValue;
-    uint256 public attributeDisplayLimit;
     uint256 public registeryCost;
     uint256 public listCount;
     uint256 public featuredList;
@@ -122,7 +122,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
             _result = string(abi.encodePacked(_result, '{"value":"0x0000000000000000000000000000000000000000"}'));
         } else{
             for (uint256 i = 0; i < listID[_ID].length; i++) {
-                if (attributeDisplayLimit != 0 && (i + listDisplayType[_ID].length) >= attributeDisplayLimit) {
+                if (attributeDisplayLimit[_ID] != 0 && (i + listDisplayType[_ID].length) >= attributeDisplayLimit[_ID]) {
                     _result = string(abi.encodePacked(_result, '{"trait_type":"*Continued*","value":"*See List Viewer*"}'));
                     break;
                 }
@@ -367,19 +367,20 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
+     * @dev List Owner or Admin can set an attribute display limit if a marketplace restricts attribute count.
+     * @param _limit The limit to set.
+     */
+    function setAttributeDisplayLimit(uint256 _ID, uint256 _limit) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        attributeDisplayLimit[_ID] = _limit;
+    }
+
+    /**
      * @dev Admin can set a featured list.
      * @param _ID The list ID.
      */
     function setFeaturedList(uint256 _ID) public onlyAdmins {
         featuredList = _ID;
-    }
-
-    /**
-     * @dev Admin can set an attribute display limit if a marketplace restricts attribute count.
-     * @param _limit The limit to set.
-     */
-    function setAttributeDisplayLimit(uint256 _limit) public onlyAdmins {
-        attributeDisplayLimit = _limit;
     }
 
     /**
