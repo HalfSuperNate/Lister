@@ -4,6 +4,7 @@ pragma solidity ^ 0.8.23;
 import {ERC721PsiBurnable, ERC721Psi} from "./ERC721Psi/extension/ERC721PsiBurnable.sol";
 import {Admins} from "./Admins.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import {LibString} from "solady/src/utils/LibString.sol";
 import {Base64} from "solady/src/utils/Base64.sol";
 
@@ -32,6 +33,8 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     mapping(uint256 => uint8[]) public listDisplayType; // 0=string, 1=int_float, 2="boost_number", 3="boost_percentage", 4="number", 5="date"
     mapping(uint256 => string[]) public listTraitType; // "string" or "" for null
     mapping(uint256 => string[]) public listTraitValue;
+    mapping(uint256 => bytes32) public listRoot;
+    mapping(uint256 => mapping(string => bool)) public listSecretUsed;
     uint256 public registeryCost;
     uint256 public listCount;
     uint256 public featuredList;
@@ -52,13 +55,14 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     error TimeNotStarted();
     error Unavailable();
     error ValueRequired();
+    error VerificationError();
     
     constructor(string memory name, string memory symbol) ERC721Psi(name, symbol) Admins(msg.sender) {
         init();
     }
 
     function init() internal {
-        if (listCount > 0) revert Unavailable();
+        if (totalSupply() > 0) revert Unavailable();
         vault = msg.sender;
         _mint(msg.sender, 1); //mints the 0 token
         paused = true;
@@ -72,7 +76,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         if (!_exists(tokenId)) revert Unavailable();
         uint256 _ID = tokenListID[tokenId];
 
-        string memory json = Base64.encode(bytes(string(abi.encodePacked(
+        string memory json = Base64.encode(bytes(string.concat(
         '{"name": "', 
         getListName(_ID), 
         '", "description": "', 
@@ -85,26 +89,26 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         listExternalURL[_ID],
         '", "attributes": ', 
         getListAttributes(_ID),
-        '}'))));
+        '}')));
 
-        return string(abi.encodePacked('data:application/json;base64,', json));
+        return string.concat('data:application/json;base64,', json);
     }
 
     function getListName(uint256 _ID) public view returns (string memory) {
-        string memory _result = compareStrings(listName[_ID],"") ? string(abi.encodePacked("#", _ID.toString())) : string(abi.encodePacked(listName[_ID], " #", _ID.toString()));
+        string memory _result = compareStrings(listName[_ID],"") ? string.concat("#", _ID.toString()) : string.concat(listName[_ID], " #", _ID.toString());
 
         return _result;
     }
 
     function getListDescription(uint256 _ID) public view returns (string memory) {
-        string memory _result = compareStrings(listDescription[_ID],"") ? string(abi.encodePacked("### ", getListName(_ID), "\\n\\n---\\n")) : string(abi.encodePacked("### ", getListName(_ID), "\\n\\n", listDescription[_ID], "\\n\\n---\\n"));
+        string memory _result = compareStrings(listDescription[_ID],"") ? string.concat("### ", getListName(_ID), "\\n\\n---\\n") : string.concat("### ", getListName(_ID), "\\n\\n", listDescription[_ID], "\\n\\n---\\n");
         // List out wallet addresses within the description
         // if (listID[_ID].length == 0) return _result;
         // for (uint256 i = 0; i < listID[_ID].length; i++) {
         //     if (i == listID[_ID].length - 1){
-        //         _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString()));
+        //         _result = string.concat(_result, "\\n- ", listID[_ID][i].toHexString());
         //     } else{
-        //         _result = string(abi.encodePacked(_result, "\\n- ", listID[_ID][i].toHexString(), ",\\n"));
+        //         _result = string.concat(_result, "\\n- ", listID[_ID][i].toHexString(), ",\\n");
         //     }
         // }
 
@@ -115,26 +119,26 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         string memory _result;
         if (listDisplayType[_ID].length != 0) {
             for (uint256 i = 0; i < listDisplayType[_ID].length; i++) {
-                _result = string(abi.encodePacked(_result, "{", getDisplayType(_ID,i), getTraitType(_ID,i), getTraitValue(_ID,i), "},"));
+                _result = string.concat(_result, "{", getDisplayType(_ID,i), getTraitType(_ID,i), getTraitValue(_ID,i), "},");
             }
         }
         if (listID[_ID].length == 0) {
-            _result = string(abi.encodePacked(_result, '{"value":"0x0000000000000000000000000000000000000000"}'));
+            _result = string.concat(_result, '{"value":"0x0000000000000000000000000000000000000000"}');
         } else{
             for (uint256 i = 0; i < listID[_ID].length; i++) {
                 if (attributeDisplayLimit[_ID] != 0 && (i + listDisplayType[_ID].length) >= attributeDisplayLimit[_ID]) {
-                    _result = string(abi.encodePacked(_result, '{"trait_type":"*Continued*","value":"*See List Viewer*"}'));
+                    _result = string.concat(_result, '{"trait_type":"*Continued*","value":"*See List Viewer*"}');
                     break;
                 }
                 if (i == listID[_ID].length - 1) {
-                    _result = string(abi.encodePacked(_result, '{"value":"', listID[_ID][i].toHexString(), '"}'));
+                    _result = string.concat(_result, '{"value":"', listID[_ID][i].toHexString(), '"}');
                 } else{
-                    _result = string(abi.encodePacked(_result, '{"value":"', listID[_ID][i].toHexString(), '"},'));
+                    _result = string.concat(_result, '{"value":"', listID[_ID][i].toHexString(), '"},');
                 }
             }
         }
         
-        return string(abi.encodePacked("[", _result, "]"));
+        return string.concat("[", _result, "]");
     }
     
     function getDisplayType(uint256 _ID, uint256 _index) public view returns (string memory) {
@@ -149,13 +153,13 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
 
     function getTraitType(uint256 _ID, uint256 _index) public view returns (string memory) {
         if (_index > listTraitType[_ID].length - 1) revert IndexOutOfRange();
-        string memory _result = compareStrings(listTraitType[_ID][_index],"") ? "" : string(abi.encodePacked('"trait_type":"', listTraitType[_ID][_index], '",'));
+        string memory _result = compareStrings(listTraitType[_ID][_index],"") ? "" : string.concat('"trait_type":"', listTraitType[_ID][_index], '",');
         return _result;
     }
 
     function getTraitValue(uint256 _ID, uint256 _index) public view returns (string memory) {
         if (_index > listDisplayType[_ID].length - 1) revert IndexOutOfRange();
-        string memory _result = listDisplayType[_ID][_index] == 0 ? string(abi.encodePacked('"value":"', listTraitValue[_ID][_index], '"')) : string(abi.encodePacked('"value":', listTraitValue[_ID][_index]));
+        string memory _result = listDisplayType[_ID][_index] == 0 ? string.concat('"value":"', listTraitValue[_ID][_index], '"') : string.concat('"value":', listTraitValue[_ID][_index]);
         return _result;
     }
 
@@ -367,6 +371,17 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
+     * @dev List Owner or Admin can set a root if the list has secret entry codes.
+     * @param _ID The list ID to edit.
+     * @param _root Root for verification.
+     * Note: Once a user enters a list with a secret, that secret is not longer usable for that list.
+     */
+    function setListRoot(uint256 _ID, bytes32 _root) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        listRoot[_ID] = _root;
+    }
+
+    /**
      * @dev List Owner or Admin can set an attribute display limit if a marketplace restricts attribute count.
      * @param _ID The list ID to edit.
      * @param _limit The limit to set.
@@ -433,6 +448,19 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
+     * @dev User can get listed on the specified list with a secret proof.
+     * @param _ID The list ID to get listed on.
+     * @param _secret Secret to check.
+     * @param _proof bytes32 array for proof.
+     */
+    function listEnterSecret(uint256 _ID, string memory _secret, bytes32[] memory _proof) external payable {
+        if (listSecretUsed[_ID][_secret]) revert AlreadyListed();
+        if (!verifyUser(_proof, _ID, _secret)) revert VerificationError();
+        listSecretUsed[_ID][_secret] = true;
+        listMeSpecified(_ID);
+    }
+
+    /**
      * @dev User can removed their address from a specified list.
      * @param _ID The list ID to get removed from.
      */
@@ -474,6 +502,21 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         if (timer[_ID][1] != 0 && block.timestamp > timer[_ID][1]) revert TimeEnded();
         sentValue[msg.sender][_ID] += msg.value;
         sentValueTotal[_ID] += msg.value;
+    }
+
+    /**
+     * @dev Verify if user is allowed on the list.
+     * @param proof bytes32 array for proof.
+     * @param _ID Batch ID to get root.
+     * @param _secret Secret to check.
+     */
+    function verifyUser(bytes32[] memory proof, uint256 _ID, string memory _secret) public view returns (bool) {
+        if (proof.length != 0){
+            if (MerkleProof.verify(proof, listRoot[_ID], keccak256(abi.encodePacked(_secret)))) {
+                return (true);
+            }
+        }
+        return (false);
     }
 
     /**
