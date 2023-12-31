@@ -426,12 +426,12 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @param _ID The list ID to get listed on.
      */
     function listMeSpecified(uint256 _ID) public payable nonReentrant {
+        if (msg.value < cost[_ID]) revert ValueRequired();
         if (listed[msg.sender][_ID]) revert AlreadyListed();
         if (!isActiveList[_ID]) revert Closed();
         if (timer[_ID][0] != 0 && block.timestamp < timer[_ID][0]) revert TimeNotStarted();
         if (timer[_ID][1] != 0 && block.timestamp > timer[_ID][1]) revert TimeEnded();
         if (limit[_ID] != 0 && listID[_ID].length >= limit[_ID]) revert Closed();
-        if (msg.value < cost[_ID]) revert ValueRequired();
         listed[msg.sender][_ID] = true;
         listID[_ID].push(msg.sender);
         if (msg.value > 0) {
