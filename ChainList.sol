@@ -442,6 +442,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         if (list[_ID].timer[0] != 0 && block.timestamp < list[_ID].timer[0]) revert TimeNotStarted();
         if (list[_ID].timer[1] != 0 && block.timestamp > list[_ID].timer[1]) revert TimeEnded();
         if (list[_ID].limit != 0 && list[_ID].listee.length >= list[_ID].limit) revert Closed();
+        if (list[_ID].verify[list[_ID].verifyCount].root != 0x0000000000000000000000000000000000000000000000000000000000000000) revert VerificationError();
         listed[msg.sender][_ID] = true;
         list[_ID].listee.push(msg.sender);
         if (msg.value > 0) {
@@ -454,7 +455,6 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev User can get listed on the featured list.
      */
     function listMe() external payable {
-        if (list[featuredList].verify[list[featuredList].verifyCount].root != 0x0000000000000000000000000000000000000000000000000000000000000000) revert VerificationError();
         listMeSpecified(featuredList);
     }
 
