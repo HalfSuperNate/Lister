@@ -454,6 +454,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev User can get listed on the featured list.
      */
     function listMe() external payable {
+        if (list[featuredList].verify[list[featuredList].verifyCount].root != 0x0000000000000000000000000000000000000000000000000000000000000000) revert VerificationError();
         listMeSpecified(featuredList);
     }
 
