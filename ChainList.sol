@@ -42,7 +42,8 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         string animation;
         string externalURL;
         Attribute[] attributes;
-        Verify[1] verify;
+        mapping(uint256 => Verify) verify;
+        uint256 verifyCount;
         address[] listee;
     }
 
@@ -386,8 +387,8 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      */
     function setListRoot(uint256 _ID, bytes32 _root) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-        delete list[_ID].verify;
-        list[_ID].verify[0].root = _root;
+        list[_ID].verifyCount++;
+        list[_ID].verify[list[_ID].verifyCount].root = _root;
     }
 
     /**
@@ -463,9 +464,9 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @param _proof bytes32 array for proof.
      */
     function listEnterSecret(uint256 _ID, string memory _secret, bytes32[] memory _proof) external payable {
-        if (list[_ID].verify[0].secretUsed[_secret]) revert AlreadyListed();
+        if (list[_ID].verify[list[_ID].verifyCount].secretUsed[_secret]) revert AlreadyListed();
         if (!verifyUser(_proof, _ID, _secret)) revert VerificationError();
-        list[_ID].verify[0].secretUsed[_secret] = true;
+        list[_ID].verify[list[_ID].verifyCount].secretUsed[_secret] = true;
         listMeSpecified(_ID);
     }
 
@@ -477,7 +478,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      */
     function verifyUser(bytes32[] memory proof, uint256 _ID, string memory _secret) public view returns (bool) {
         if (proof.length != 0){
-            if (MerkleProof.verify(proof, list[_ID].verify[0].root, keccak256(abi.encodePacked(_secret)))) {
+            if (MerkleProof.verify(proof, list[_ID].verify[list[_ID].verifyCount].root, keccak256(abi.encodePacked(_secret)))) {
                 return (true);
             }
         }
@@ -570,6 +571,21 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         }
         // if sent total passes z ETH or w listed the percentage caps at tier 2
         return feeTier[2];
+    }
+
+    /**
+     * @dev Admin can set fee tier costs and limits.
+     * @param _config New fee config.
+     * Note: feeTier = [default, tier_1, tier_2], feeTierLimits = [tier_1_listed, tier_1_sent, tier_2_listed, tier_2_sent]
+     */
+    function setFeeConfig(uint256[7] calldata _config) external onlyAdmins {
+        feeTier[0] = _config[0]; // default
+        feeTier[1] = _config[1]; // tier 1
+        feeTier[2] = _config[2]; // tier 2
+        feeTierLimits[0] = _config[3]; // tier 1 listed
+        feeTierLimits[1] = _config[4]; // tier 1 sent
+        feeTierLimits[2] = _config[5]; // tier 2 listed
+        feeTierLimits[3] = _config[6]; // tier 2 sent
     }
 
     /**
