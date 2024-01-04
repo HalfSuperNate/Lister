@@ -382,8 +382,8 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev List Owner or Admin can set a root if the list has secret entry codes.
      * @param _ID The list ID to edit.
      * @param _root Root for verification.
-     * Note: Once a user enters a list with a secret, that secret is not longer usable for that list.
-     * Warning: Setting a root resets all previously used secrets.
+     * Note: Once a user enters a list with a secret, that secret is no longer usable for that list.
+     * Warning: Setting a new root resets all secrets.
      */
     function setListRoot(uint256 _ID, bytes32 _root) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
