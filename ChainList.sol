@@ -96,7 +96,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         '", "description": "', 
         getListDescription(_ID), 
         '", "image": "', 
-        list[_ID].image, 
+        getListImage(_ID), 
         '", "animation_url": "', 
         list[_ID].animation,
         '", "external_url": "', 
@@ -116,6 +116,18 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
 
     function getListDescription(uint256 _ID) public view returns (string memory) {
         string memory _result = compareStrings(list[_ID].description,"") ? string.concat("### ", getListName(_ID), "\\n\\n---\\n") : string.concat("### ", getListName(_ID), "\\n\\n", list[_ID].description, "\\n\\n---\\n");
+
+        return _result;
+    }
+
+    function getListImage(uint256 _ID) public view returns (string memory) {
+        string memory _result = compareStrings(list[_ID].image,"") ? string.concat("data:image/svg+xml;base64,", Base64.encode(bytes(getDefaultImage(_ID)))) : list[_ID].image;
+
+        return _result;
+    }
+
+    function getDefaultImage(uint256 _ID) internal view returns (string memory) {
+        string memory _result= string.concat('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" style="user-select:none;pointer-events:none;background:#252525;"><foreignObject width="100%" height="100%" x="0" y="0" overflow="visible"><textarea xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;font:13px/1.35em verdana;text-align:center;display:flex;justify-content:center;align-items:center;background:0 0;border:none;resize:none;color:white">', getListName(_ID), '</textarea></foreignObject>Sorry, your browser does not support inline SVG.</svg>');
 
         return _result;
     }
