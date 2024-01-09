@@ -45,6 +45,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         mapping(uint256 => Verify) verify;
         uint256 verifyCount;
         address[] listee;
+        address payout;
     }
 
     struct Attribute {
@@ -242,6 +243,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         listCount++;
         tokenListID[listCount] = _ID;
         listIDToken[_ID] = listCount;
+        list[_ID].payout = msg.sender;
         _mint(msg.sender, 1);
     }
 
@@ -339,15 +341,23 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev List Owner or Admin can configure a list.
      * @param _ID The list ID to edit.
      * @param _config Config [activeState, cost, limit, timerStart, timerEnd].
+     * @param _payout Set a new payout address for the list, default is list owner.
      * Note: 0 = false, 1 = true. Example for a free no cost no limits list: 0, [1,0,0,0,0]
      */
-    function setListConfig(uint256 _ID, uint256[5] calldata _config) external {
+    function setListConfig(uint256 _ID, uint256[5] calldata _config, address _payout) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         list[_ID].isActive = _config[0] == 1;
         list[_ID].cost = _config[1];
         list[_ID].limit = _config[2];
         list[_ID].timer[0] = _config[3];
         list[_ID].timer[1] = _config[4];
+        if (msg.sender != _payout) {
+            if (_payout == address(0)) {
+                list[_ID].payout = listOwnerByID(_ID);
+            } else{
+                list[_ID].payout = _payout;
+            }
+        }
     }
 
     /**
@@ -368,6 +378,16 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     function setListLimit(uint256 _ID, uint256 _limit) external {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
         list[_ID].limit = _limit;
+    }
+
+    /**
+     * @dev List Owner or Admin can set a payout address.
+     * @param _ID The list ID to edit.
+     * @param _payout Set a new payout address for the list, default is list owner.
+     */
+    function setListPayout(uint256 _ID, address _payout) external {
+        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        list[_ID].payout = _payout;
     }
 
     /**
@@ -604,17 +624,17 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     /**
      * @dev Pull list funds.
      * @param _ID The list ID to pull from.
-     * Note: Only List Owner or Admins can call this function.
+     * Note: Funds get sent to payout address set for the list.
      */
     function withdraw(uint256 _ID) external nonReentrant {
-        if (!isListOwnerAdmin(_ID)) revert InvalidUser();
+        require(list[_ID].payout != address(0), "List payout not set");
         uint256 releasable = sentValueTotal[_ID] - releasedValueTotal[_ID];
         uint256 fee = releasable * getFeePercentage(_ID) / 1000;
         uint256 payment = releasable - fee;
         require(payment != 0, "List is not due payment");
         releasedValueTotal[_ID] += releasable;
         vaultBalance += fee;
-        (bool success, ) = payable(msg.sender).call{ value: payment } ("");
+        (bool success, ) = payable(list[_ID].payout).call{ value: payment } ("");
         require(success);
     }
 
