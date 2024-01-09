@@ -622,7 +622,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
-     * @dev Pull list funds.
+     * @dev Pull list funds to list payout address.
      * @param _ID The list ID to pull from.
      * Note: Funds get sent to payout address set for the list.
      */
