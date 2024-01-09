@@ -338,6 +338,14 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
+     * @dev User can get the payout address for the specified list.
+     * @param _ID The list ID to get.
+     */
+    function getListPayout(uint256 _ID) external view returns(address) {
+        return list[_ID].payout;
+    }
+
+    /**
      * @dev List Owner or Admin can configure a list.
      * @param _ID The list ID to edit.
      * @param _config Config [activeState, cost, limit, timerStart, timerEnd].
