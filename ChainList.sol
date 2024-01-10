@@ -60,6 +60,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     error AlreadyListed();
+    error CannotAddAddress();
     error CannotBeZeroAddress();
     error Closed();
     error IndexOutOfRange();
@@ -251,7 +252,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
      * @dev Get list owner of the specified list.
      * @param _ID The list ID to check.
      */
-    function listOwnerByID(uint256 _ID) public view returns(address) {
+    function getListOwnerByID(uint256 _ID) public view returns(address) {
         uint256 _tokenID = listIDToken[_ID];
         return ownerOf(_tokenID);
     }
@@ -264,16 +265,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         if (checkIfAdmin()) {
             return true;
         }
-        return listOwnerByID(_ID) == msg.sender;
-    }
-
-    /**
-     * @dev User can check if an address is on the specified list.
-     * @param _ID The list ID to get.
-     * @param _address The address to check.
-     */
-    function checkIsListed(uint256 _ID, address _address) external view returns(bool) {
-        return listed[_address][_ID];
+        return getListOwnerByID(_ID) == msg.sender;
     }
 
     /**
@@ -286,18 +278,10 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
-     * @dev User can get a list of addresses on the specified list.
-     * @param _ID The list ID to get.
-     */
-    function getList(uint256 _ID) external view returns(address[] memory) {
-        return list[_ID].listee;
-    }
-
-    /**
      * @dev User can get a list of values sent on the specified list if tracked.
      * @param _ID The list ID to get.
      */
-    function getSentValues(uint256 _ID) public view returns(uint256[] memory) {
+    function getSentValues(uint256 _ID) external view returns(uint256[] memory) {
         uint256[] memory _values = new uint256[](list[_ID].listee.length);
         for (uint256 i = 0; i < list[_ID].listee.length; i++) {
             _values[i] = sentValue[list[_ID].listee[i]][_ID];
@@ -346,6 +330,23 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
+     * @dev User can get a list of addresses on the specified list.
+     * @param _ID The list ID to get.
+     */
+    function getList(uint256 _ID) external view returns(address[] memory) {
+        return list[_ID].listee;
+    }
+
+    /**
+     * @dev User can check if an address is on the specified list.
+     * @param _ID The list ID to get.
+     * @param _address The address to check.
+     */
+    function checkIsListed(uint256 _ID, address _address) external view returns(bool) {
+        return listed[_address][_ID];
+    }
+
+    /**
      * @dev List Owner or Admin can configure a list.
      * @param _ID The list ID to edit.
      * @param _config Config [activeState, cost, limit, timerStart, timerEnd].
@@ -361,7 +362,7 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
         list[_ID].timer[1] = _config[4];
         if (msg.sender != _payout) {
             if (_payout == address(0)) {
-                list[_ID].payout = listOwnerByID(_ID);
+                list[_ID].payout = getListOwnerByID(_ID);
             } else{
                 list[_ID].payout = _payout;
             }
@@ -450,15 +451,15 @@ contract ChainList is ERC721PsiBurnable, ReentrancyGuard, Admins {
     }
 
     /**
-     * @dev List Owner or Admin can add or remove an address on a specified list.
+     * @dev List Owner or Admin can remove an address on a specified list, only Admins can add.
      * @param _ID The list ID to edit.
      * @param _address The address to add or remove.
      * @param _addRemove Flag true to add address, false to remove address.
-     * Note: An address can only be added if the limit is not reached.
+     * Note: An address can only be added by an admin with list owner approval and if the limit is not reached.
      */
     function listSpecifiedAddRemove(uint256 _ID, address _address, bool _addRemove) external nonReentrant {
         if (!isListOwnerAdmin(_ID)) revert InvalidUser();
-        if (_addRemove) {
+        if (_addRemove && checkIfAdmin()) {
             if (listed[_address][_ID]) revert AlreadyListed();
             if (list[_ID].limit != 0 && list[_ID].listee.length >= list[_ID].limit) revert Closed();
             listed[_address][_ID] = true;
